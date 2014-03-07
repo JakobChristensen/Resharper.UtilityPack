@@ -6,6 +6,7 @@
     <title>Utility Pack</title>
     <authors>Jakob Christensen</authors>
     <description>Contains 9 context actions: Duplicate Method, Make Abstract, Make Virtual, Pull Parameters, Reverse For-loop, Use As Operation, Use Cast Operation, Use String.Compare, and Use StringBuilder.</description>
+    <projectUrl>https://github.com/JakobChristensen/Resharper.UtilityPack</projectUrl>
     <copyright>Copyright &#x00A9; Jakob Christensen</copyright>
     <tags>Context Actions</tags>
     <dependencies>
