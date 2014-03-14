@@ -46,6 +46,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Actions\DuplicateMethod.cs" />
+    <Compile Include="Actions\InvertReturnValue.cs" />
     <Compile Include="Actions\MakeAbstract.cs" />
     <Compile Include="Actions\MakeVirtual.cs" />
     <Compile Include="Actions\PullParameters.cs" />

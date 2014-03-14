@@ -1,14 +1,13 @@
 namespace UtilityPack.Actions
 {
   using System;
-  using System.Diagnostics;
   using JetBrains.Annotations;
   using JetBrains.Application.Progress;
   using JetBrains.ProjectModel;
   using JetBrains.ReSharper.Feature.Services.Bulbs;
   using JetBrains.ReSharper.Feature.Services.CSharp.Bulbs;
   using JetBrains.ReSharper.Intentions.Extensibility;
-  using JetBrains.ReSharper.Intentions.Util;
+  using JetBrains.ReSharper.Psi;
   using JetBrains.ReSharper.Psi.CSharp.Tree;
   using JetBrains.ReSharper.Psi.Tree;
   using JetBrains.TextControl;
@@ -18,8 +17,8 @@ namespace UtilityPack.Actions
   /// <summary>
   /// Class DuplicateMethod
   /// </summary>
-  [ContextAction(Name = "Duplicate method [Utility Pack]", Description = "Duplicates a method [Utility Pack]", Group = "C#")]
-  public class DuplicateMethod : ContextActionBase
+  [ContextAction(Name = "Invert return value [Utility Pack]", Description = "Inverts the return value of a method that returns a boolean [Utility Pack]", Group = "C#")]
+  public class InvertReturnValue : ContextActionBase
   {
     #region Constants and Fields
 
@@ -33,10 +32,10 @@ namespace UtilityPack.Actions
     #region Constructors and Destructors
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="DuplicateMethod"/> class.
+    /// Initializes a new instance of the <see cref="InvertReturnValue"/> class.
     /// </summary>
     /// <param name="provider">The provider.</param>
-    public DuplicateMethod([NotNull] ICSharpContextActionDataProvider provider)
+    public InvertReturnValue([NotNull] ICSharpContextActionDataProvider provider)
     {
       this.provider = provider;
     }
@@ -53,7 +52,7 @@ namespace UtilityPack.Actions
     {
       get
       {
-        return "Duplicate method [Utility Pack]";
+        return "Invert return value [Utility Pack]";
       }
     }
 
@@ -89,26 +88,11 @@ namespace UtilityPack.Actions
         return null;
       }
 
-      var code = model.Method.GetText();
-      if (string.IsNullOrEmpty(code))
-      {
-        return null;
-      }
+      var processor = new RecursiveElementProcessor(this.ReplaceReturnValue);
 
-      var typeMember = this.provider.ElementFactory.CreateTypeMemberDeclaration(code);
+      model.Method.ProcessDescendants(processor);
 
-      var classDeclaration = model.ContainingType as IClassLikeDeclaration;
-      if (classDeclaration == null)
-      {
-        return null;
-      }
-
-      var memberDeclaration = typeMember as IClassMemberDeclaration;
-      Debug.Assert(memberDeclaration != null, "memberDeclaration != null");
-
-      var result = classDeclaration.AddClassMemberDeclarationBefore(memberDeclaration, model.Method);
-
-      FormattingUtils.Format(result);
+      FormattingUtils.Format(model.Method);
 
       return null;
     }
@@ -140,11 +124,114 @@ namespace UtilityPack.Actions
         return null;
       }
 
+      var declaredElement = result.DeclaredElement;
+      if (declaredElement == null)
+      {
+        return null;
+      }
+
+      var type = declaredElement.ReturnType;
+      if (type == null)
+      {
+        return null;
+      }
+
+      if (type.GetPresentableName(result.Language) != "bool")
+      {
+        return null;
+      }
+
       return new Model
       {
         Method = result,
-        ContainingType = containingType
       };
+    }
+
+    /// <summary>
+    /// Determines whether [is not expression] [the specified value].
+    /// </summary>
+    /// <param name="value">The value.</param>
+    /// <returns><c>true</c> if [is not expression] [the specified value]; otherwise, <c>false</c>.</returns>
+    private bool IsNotExpression(ITreeNode value)
+    {
+      var unaryOperatorExpression = value as IUnaryOperatorExpression;
+      if (unaryOperatorExpression == null)
+      {
+        return false;
+      }
+
+      var sign = unaryOperatorExpression.OperatorSign;
+      if (sign == null)
+      {
+        return false;
+      }
+
+      var operatorSign = sign.GetText();
+
+      return operatorSign == "!";
+    }
+
+    /// <summary>
+    /// Replaces the return value.
+    /// </summary>
+    /// <param name="treeNode">The element.</param>
+    private void ReplaceReturnValue(ITreeNode treeNode)
+    {
+      var returnStatement = treeNode as IReturnStatement;
+      if (returnStatement == null)
+      {
+        return;
+      }
+
+      var value = returnStatement.Value;
+      if (value == null)
+      {
+        return;
+      }
+
+      var factory = this.provider.ElementFactory;
+      if (factory == null)
+      {
+        return;
+      }
+
+      ICSharpExpression expression;
+
+      var text = value.GetText();
+      if (text == "true")
+      {
+        expression = factory.CreateExpression("false");
+      }
+      else if (text == "false")
+      {
+        expression = factory.CreateExpression("true");
+      }
+      else if (this.IsNotExpression(value))
+      {
+        var unaryOperatorExpression = (IUnaryOperatorExpression)value;
+
+        text = unaryOperatorExpression.Operand.GetText();
+        if (text.StartsWith("(") && text.EndsWith(")"))
+        {
+          text = text.Substring(1, text.Length - 2);
+        }
+
+        expression = factory.CreateExpression(text);
+      }
+      else
+      {
+        if (text.StartsWith("(") && text.EndsWith(")"))
+        {
+          text = text.Substring(1, text.Length - 2);
+        }
+
+        expression = factory.CreateExpression("!(" + text + ")");
+      }
+
+      if (expression != null)
+      {
+        value.ReplaceBy(expression);
+      }
     }
 
     #endregion
@@ -153,13 +240,6 @@ namespace UtilityPack.Actions
     private class Model
     {
       #region Public Properties
-
-      /// <summary>
-      /// Gets or sets the type of the containing.
-      /// </summary>
-      /// <value>The type of the containing.</value>
-      [NotNull]
-      public ICSharpTypeDeclaration ContainingType { get; set; }
 
       /// <summary>
       /// Gets or sets the function.
