@@ -1,3 +1,5 @@
+*** DISCONTINUED ***
+
 Resharper.UtilityPack
 =====================
 
